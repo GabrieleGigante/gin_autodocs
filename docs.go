@@ -30,7 +30,7 @@ func DocumentEndpoint() {
 	println(fmt.Sprint(file, " | ", line, " | ", fnName))
 }
 
-func DocumentApi(e *gin.Engine, path string, apiDocs ApiDocumentation) {
+func DocumentApi(e *gin.Engine, path string, apiDocs DocumentationOptions) {
 	mode := os.Getenv("GIN_MODE")
 	if mode != "debug" && mode != "" {
 		return
@@ -50,9 +50,9 @@ func DocumentApi(e *gin.Engine, path string, apiDocs ApiDocumentation) {
 		}
 	}
 
-	e.GET(path, func(c *gin.Context) {
+	e.GET(path+"*", func(c *gin.Context) {
 		c.Header("Content-type", "text/html")
-		c.File("docs/docs.html")
+		c.File("temp/docs/docs.html")
 	})
 	e.GET("/favicon.ico", func(c *gin.Context) {
 		c.File("favicon.ico")
@@ -63,12 +63,13 @@ func DocumentApi(e *gin.Engine, path string, apiDocs ApiDocumentation) {
 		panic(err)
 	}
 	// generating docs
-	os.Mkdir("docs", os.ModePerm)
-	err = os.WriteFile("docs/docs.json", res, 0644)
+	fmt.Println("MAKING DOCS")
+	os.Mkdir("temp/docs", os.ModePerm)
+	err = os.WriteFile("temp/docs/docs.json", res, 0644)
 	if err != nil {
 		panic(err.Error())
 	}
-	out, err := exec.Command("redoc-cli", "build", "docs/docs.json", "-o", "docs/docs.html").Output()
+	out, err := exec.Command("redoc-cli", "build", "temp/docs/docs.json", "-o", "temp/docs/docs.html").Output()
 	if err != nil {
 		panic(err.Error())
 	}
@@ -83,7 +84,7 @@ func GetAutoTag(path string) string {
 	return ""
 }
 
-func (d ApiDocumentation) toJson() ([]byte, error) {
+func (d DocumentationOptions) toJson() ([]byte, error) {
 	// paths := make(map[string]interface{})
 	// for _, path := range d.Paths {
 	// }
@@ -99,7 +100,7 @@ func (d ApiDocumentation) toJson() ([]byte, error) {
 	return res, nil
 }
 
-type ApiDocumentation struct {
+type DocumentationOptions struct {
 	Openapi      string                          `json:"openapi,omitempty"`
 	Info         Info                            `json:"info,omitempty"`
 	ExternalDocs *ExternalDocs                   `json:"externalDocs,omitempty"`
