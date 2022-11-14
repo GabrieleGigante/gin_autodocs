@@ -5,29 +5,31 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"runtime"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 )
 
-func trace() (string, int, string) {
-	pc, file, line, ok := runtime.Caller(2)
-	if !ok {
-		return "?", 0, "?"
-	}
+var docs map[string]Operation = make(map[string]Operation)
 
-	fn := runtime.FuncForPC(pc)
-	if fn == nil {
-		return file, line, "?"
-	}
+// func trace(depth int) (string, int, string) {
+// 	pc, file, line, ok := runtime.Caller(depth)
+// 	if !ok {
+// 		return "?", 0, "?"
+// 	}
 
-	return file, line, fn.Name()
-}
+// 	fn := runtime.FuncForPC(pc)
+// 	if fn == nil {
+// 		return file, line, "?"
+// 	}
 
-func DocumentEndpoint() {
-	file, line, fnName := trace()
-	println(fmt.Sprint(file, " | ", line, " | ", fnName))
+// 	return file, line, fn.Name()
+// }
+
+func DocumentEndpoint(endpoint string, doc Operation) {
+	// file, line, fnName := trace(2)
+	// fmt.Println(fmt.Sprint(file, " | ", line, " | ", fnName))
+	docs[endpoint] = doc
 }
 
 func DocumentApi(e *gin.Engine, path string, apiDocs DocumentationOptions) {
@@ -43,33 +45,32 @@ func DocumentApi(e *gin.Engine, path string, apiDocs DocumentationOptions) {
 		if apiDocs.Paths[route.Path] == nil {
 			apiDocs.Paths[route.Path] = map[string]Operation{}
 		}
-		apiDocs.Paths[route.Path][strings.ToLower(route.Method)] = Operation{
-			Tags:        []string{GetAutoTag(route.Path)},
-			Summary:     "This is a summary",
-			Description: "this is a description",
-		}
+		temp := docs[strings.ToUpper(route.Method)+"-"+route.Path]
+		temp.Tags = append(temp.Tags, GetAutoTag(route.Path))
+		fmt.Println(temp)
+		apiDocs.Paths[route.Path][strings.ToLower(route.Method)] = temp
 	}
 
-	e.GET(path+"*", func(c *gin.Context) {
+	e.GET(path, func(c *gin.Context) {
 		c.Header("Content-type", "text/html")
-		c.File("temp/docs/docs.html")
+		c.File("docs/docs.html")
 	})
 	e.GET("/favicon.ico", func(c *gin.Context) {
 		c.File("favicon.ico")
 	})
 
 	res, err := apiDocs.toJson()
+	fmt.Println(string(res))
 	if err != nil {
 		panic(err)
 	}
 	// generating docs
-	fmt.Println("MAKING DOCS")
-	os.Mkdir("temp/docs", os.ModePerm)
-	err = os.WriteFile("temp/docs/docs.json", res, 0644)
+	os.Mkdir("docs", os.ModePerm)
+	err = os.WriteFile("docs/docs.json", res, 0644)
 	if err != nil {
 		panic(err.Error())
 	}
-	out, err := exec.Command("redoc-cli", "build", "temp/docs/docs.json", "-o", "temp/docs/docs.html").Output()
+	out, err := exec.Command("redoc-cli", "build", "docs/docs.json", "-o", "docs/docs.html").Output()
 	if err != nil {
 		panic(err.Error())
 	}
@@ -144,7 +145,7 @@ type Operation struct {
 	// Responses   Responses   `json:"responses,omitempty"`
 }
 type RequestBody struct {
-	Description string `json:"description,omitempty"`
-	// Content     Content `json:"content,omitempty"`
-	Required bool `json:"required,omitempty"`
+	Description string         `json:"description,omitempty"`
+	Content     map[string]any `json:"content,omitempty"`
+	Required    bool           `json:"required,omitempty"`
 }
